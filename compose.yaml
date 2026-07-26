@@ -1,9 +1,10 @@
 services:
   uptime-kuma:
     image: louislam/uptime-kuma:2
-    restart: unless-stopped
+    # PM2 owns restarts via scripts/pm2-docker.sh — do not fight with Docker restart policy
+    restart: "no"
     volumes:
       - ./data:/app/data
     ports:
-      # <Host Port>:<Container Port>
-      - "3001:3001"
+      # Only localhost — nginx proxies publicly
+      - "127.0.0.1:3001:3001"
