@@ -2,11 +2,13 @@ module.exports = {
     apps: [
         {
             name: "uptime-kuma",
-            script: "./server/server.js",
-            env: {
-                // Skip health checks while the laptop has no network (macOS scutil --nwi)
-                UPTIME_KUMA_SKIP_CHECKS_WHEN_OFFLINE: "1",
-            },
+            script: "./scripts/pm2-docker.sh",
+            interpreter: "bash",
+            cwd: __dirname,
+            autorestart: true,
+            max_restarts: 10,
+            min_uptime: "10s",
+            // Host Node version does not matter — the container has Node 20+.
         },
     ],
 };
