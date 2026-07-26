@@ -62,6 +62,7 @@ const zlib = require("node:zlib");
 const { promisify } = require("node:util");
 const brotliCompress = promisify(zlib.brotliCompress);
 const DomainExpiry = require("./domain_expiry");
+const { isHostInternetAvailable } = require("../internet-connectivity");
 
 const rootCertificates = rootCertificatesFingerprints();
 
@@ -469,6 +470,9 @@ class Monitor extends BeanModel {
             try {
                 if (await Monitor.isUnderMaintenance(this.id)) {
                     bean.msg = "Monitor under maintenance";
+                    bean.status = MAINTENANCE;
+                } else if (!(await isHostInternetAvailable())) {
+                    bean.msg = "Skipped: host has no internet connection";
                     bean.status = MAINTENANCE;
                 } else if (this.type === "http" || this.type === "keyword" || this.type === "json-query") {
                     // Do not do any queries/high loading things before the "bean.ping"
