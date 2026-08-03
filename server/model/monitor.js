@@ -1,6 +1,5 @@
 const dayjs = require("dayjs");
 const axios = require("axios");
-const { setTimeout, clearTimeout } = require("unlimited-timeout");
 const { Prometheus } = require("../prometheus");
 const {
     log,
@@ -9,6 +8,7 @@ const {
     PENDING,
     MAINTENANCE,
     flipStatus,
+    MAX_INTERVAL_SECOND,
     MIN_INTERVAL_SECOND,
     SQL_DATETIME_FORMAT,
     evaluateJsonQuery,
@@ -195,16 +195,12 @@ class Monitor extends BeanModel {
             screenshot,
             cacheBust: this.getCacheBust(),
             remote_browser: this.remote_browser,
-            screenshot_delay: this.screenshot_delay,
             snmpOid: this.snmpOid,
             jsonPathOperator: this.jsonPathOperator,
             snmpVersion: this.snmpVersion,
             smtpSecurity: this.smtpSecurity,
             rabbitmqNodes: JSON.parse(this.rabbitmqNodes),
             conditions: JSON.parse(this.conditions),
-            ntpStratumThreshold: this.ntp_stratum_threshold,
-            ntpTimeOffsetThreshold: this.ntp_time_offset_threshold,
-            ntpRootDispersionThreshold: this.ntp_root_dispersion_threshold,
             ipFamily: this.ipFamily,
             expectedTlsAlert: this.expected_tls_alert,
 
@@ -1025,7 +1021,7 @@ class Monitor extends BeanModel {
                     ) {
                         log.warn(
                             "domain_expiry",
-                            `Domain expiry unsupported for '.${error.meta.publicSuffix}' because it lacks an RDAP endpoint in the IANA database. This isn’t an Uptime Kuma bug, a limitation of your registry. If an RDAP server exists, ask your registrar politely to submit it to IANA so expiry checks can work.`
+                            `Domain expiry unsupported for '.${error.meta.publicSuffix}' because its RDAP endpoint is not listed in the IANA database.`
                         );
                     }
                 }
@@ -1109,7 +1105,7 @@ class Monitor extends BeanModel {
 
         // Delay Push Type
         if (this.type === "push") {
-            this.heartbeatInterval = setTimeout(() => {
+            setTimeout(() => {
                 safeBeat();
             }, this.interval * 1000);
         } else {
@@ -1622,15 +1618,21 @@ class Monitor extends BeanModel {
     }
 
     /**
-     * Validate monitor configuration
+     * Make sure monitor interval is between bounds
      * @returns {void}
-     * @throws {Error} If validation fails
+     * @throws Interval is outside of range
      */
     validate() {
+        if (this.interval > MAX_INTERVAL_SECOND) {
+            throw new Error(`Interval cannot be more than ${MAX_INTERVAL_SECOND} seconds`);
+        }
         if (this.interval < MIN_INTERVAL_SECOND) {
             throw new Error(`Interval cannot be less than ${MIN_INTERVAL_SECOND} seconds`);
         }
 
+        if (this.retryInterval > MAX_INTERVAL_SECOND) {
+            throw new Error(`Retry interval cannot be more than ${MAX_INTERVAL_SECOND} seconds`);
+        }
         if (this.retryInterval < MIN_INTERVAL_SECOND) {
             throw new Error(`Retry interval cannot be less than ${MIN_INTERVAL_SECOND} seconds`);
         }
@@ -1692,22 +1694,6 @@ class Monitor extends BeanModel {
             } catch (e) {
                 throw new Error(`Accepted status codes must be valid JSON: ${e.message}`);
             }
-        }
-
-        if (["system-service", "pm2"].includes(this.type)) {
-            this.system_service_name = (this.system_service_name || "").trim();
-
-            if (!this.system_service_name) {
-                throw new Error(this.type === "pm2" ? "PM2 process name is required." : "Service Name is required.");
-            }
-        }
-
-        if (this.type === "system-service" && !/^[a-zA-Z0-9._\-@]+$/.test(this.system_service_name)) {
-            throw new Error("Invalid service name. Please use the internal Service Name (no spaces).");
-        }
-
-        if (this.type === "pm2" && /[\u0000-\u001F\u007F]/.test(this.system_service_name)) {
-            throw new Error("Invalid PM2 process name.");
         }
 
         if (this.type === "ping") {
